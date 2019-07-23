@@ -11,3 +11,5 @@ edition = "2018"
 termion = "1.5.3"
 scribe = "0.7.2"
 textwrap = "0.11.0"
+vek = "0.9.8"
+#vte = "0.3.3" # for terminal emulation

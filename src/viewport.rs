@@ -74,14 +74,15 @@ impl Viewport {
 
                     write!(
                         s,
-                        "{} {}{}{:>3}{} {}{}",
+                        "{} {}{}{:>lcount$}{} {}{}",
                         cursor::Goto(self.origin.0, self.origin.1 + (i - self.starting_visible_line) as u16),
                         color::Fg(color::White),
                         if focused { format!("{}", style::Bold) } else { "".to_owned() }, // Bold the line number
                         i + 1,
                         style::NoBold,
                         if focused { format!("{}", color::Fg(color::LightWhite)) } else { "".to_owned() },
-                        l
+                        l,
+                        lcount = 3, // The right align space needed for the line number
                     ) // TODO: think about lines that are LESS than the visibility
                     .unwrap();
 
