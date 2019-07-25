@@ -6,6 +6,7 @@
 use termion::{color, cursor};
 use vek::*;
 use std::io::Write;
+use lazy_static::*;
 
 static DEFAULT_FG: Fg = Fg(Color::White);
 static DEFAULT_BG: Bg = Bg(Color::Black);
@@ -192,10 +193,20 @@ impl RenderBuffer {
 
     /// Truncate cells or append new blank cells to the buffer to fit
     /// within the bounds of the given new size.
+    /// 
+    /// The RenderBuffer is automatically resized when needed by the `render` function.
     pub fn resize(&mut self, new_size: Extent2<usize>) {
         self.grids.0.resize(new_size);
         self.grids.1.resize(new_size);
         self.size = new_size;
+    }
+
+    pub fn auto_resize(&mut self) {
+        let term_size = termion::terminal_size().expect("Could not get terminal size to auto-resize the RenderBuffer");
+        let term_size = Extent2::from((term_size.0 as usize, term_size.1 as usize));
+        if self.size != term_size {
+            self.resize(term_size);
+        }
     }
 
     pub fn set_fg(&mut self, fg: Color) {
@@ -219,6 +230,24 @@ impl RenderBuffer {
             Draw::Rect(w, h) => for x in 0..w {
                 for y in 0..h {
                     self.set_cell((origin.0 + x, origin.1 + y), ' ');
+                }
+            },
+            Draw::BeamRect(w, h) => for y in 0..h {
+                if y == 0 { // Top row
+                    self.set_cell((origin.0, origin.1), '┌');
+                    for x in 1..w-1 {
+                        self.set_cell((origin.0 + x, origin.1), '─')
+                    }
+                    self.set_cell((origin.0 + (w-1), origin.1 + y), '┐');
+                } else if y == h - 1 { // Bottom row
+                    self.set_cell((origin.0, origin.1 + y), '└');
+                    for x in 1..w-1 {
+                        self.set_cell((origin.0 + x, origin.1 + y), '─')
+                    }
+                    self.set_cell((origin.0 + (w-1), origin.1 + y), '┘');
+                } else { // Everything inbetween
+                    self.set_cell((origin.0, origin.1 + y), '│');
+                    self.set_cell((origin.0 + (w-1), origin.1 + y), '│');
                 }
             },
         }
@@ -263,8 +292,7 @@ impl RenderBuffer {
             }
         }
 
-        // self.grids.0 = self.grids.1.clone(); // TODO copy when drawing cells above
-        dbg!(&out);
+        // dbg!(&out);
         out
     }
 
@@ -281,4 +309,5 @@ impl RenderBuffer {
 pub enum Draw<'a> {
     Text(&'a str),
     Rect(usize, usize),
+    BeamRect(usize, usize),
 }
