@@ -16,22 +16,22 @@ mod render;
 use viewport::{ViewportData, ViewportManager};
 use render::*;
 
+// fn main() {
+//     let size = terminal_size().unwrap();
+//     let screen = screen::AlternateScreen::from(stdout().into_raw_mode().unwrap());
+
+//     let mut render_buffer = render::RenderBuffer::new((size.0 as usize, size.1 as usize));
+//     render_buffer.set_cell((1, 1), 'F');
+//     render_buffer.set_fg(Color::Blue);
+//     render_buffer.draw((1, 2), Draw::Text("This is a test..."));
+//     render_buffer.set_bg(Color::LightWhite);
+//     render_buffer.draw((3, 3), Draw::Rect(3, 3));
+
+//     render_buffer.render();
+//     std::thread::sleep(std::time::Duration::from_secs(3));
+// }
+
 fn main() {
-    let size = terminal_size().unwrap();
-    let screen = screen::AlternateScreen::from(stdout().into_raw_mode().unwrap());
-
-    let mut render_buffer = render::RenderBuffer::new((size.0 as usize, size.1 as usize));
-    render_buffer.set_cell((1, 1), 'F');
-    render_buffer.set_fg(Color::Blue);
-    render_buffer.draw((1, 2), Draw::Text("This is a test..."));
-    render_buffer.set_bg(Color::LightWhite);
-    render_buffer.draw((3, 3), Draw::Rect(3, 3));
-
-    render_buffer.render();
-    std::thread::sleep(std::time::Duration::from_secs(3));
-}
-
-fn other() {
     panic::set_hook(Box::new(|panic_info| util::alert(&mut stdout(), "Panic!", &format!("{}{}", cursor::Show, panic_info))));
 
     let mut screen = screen::AlternateScreen::from(stdout().into_raw_mode().unwrap());

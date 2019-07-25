@@ -211,7 +211,9 @@ impl ViewportManager {
             (v.origin, v.size)
         };
 
-        // Draw the Viewport's bounding box
+        // Draw the inside of the bounding box
+        crate::util::draw_rectangle(s, &color::Blue, (v_origin.0-1, v_origin.1-1), (v_size.0+1, v_size.1+1));
+        // Draw the Viewport's 'beam' bounding box
         crate::util::draw_thin_unfilled_rectangle(s, &color::White, &color::Blue, (v_origin.0-1, v_origin.1-1), (v_size.0+1, v_size.1+1));
 
         {
