@@ -3,18 +3,16 @@
 //! Rendering graphics is done using high-level functions, that are, by themselves,
 //! unrelated to the backend at hand.
 
-use termion::color;
+use termion::{color, cursor};
+use vek::*;
 use std::io::Write;
-use vek::vec::repr_simd::extent2::Extent2;
 
 static DEFAULT_FG: Fg = Fg(Color::White);
 static DEFAULT_BG: Bg = Bg(Color::Black);
-// static DEFAULT_CELL_ATTR: CellAttr = CellAttr { fg: Fg(Color::White), bg: Bg(Color::Black) };
-static DEFAULT_CELL: Cell = Cell { ch: ' ', fg: Fg(Color::White), bg: Bg(Color::Black) };
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Fg(pub Color);
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Bg(pub Color);
 
 impl std::fmt::Display for Fg {
@@ -39,7 +37,7 @@ impl std::fmt::Display for Bg {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Color {
     White,
     Black,
@@ -47,79 +45,107 @@ pub enum Color {
     Blue,
 }
 
-// #[derive(Debug, Clone)]
-// pub struct CellAttr {
-//     pub fg: Fg,
-//     pub bg: Bg,
-// }
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct Cell(char, Fg, Bg);
 
-#[derive(Debug, Clone)]
-pub struct Cell {
-    ch: char,
-    fg: Fg,
-    bg: Bg,
+impl Default for Cell {
+    fn default() -> Cell {
+        Cell(' ', DEFAULT_FG, DEFAULT_BG)
+    }
 }
 
-/*
-theory: attributes are only needed when setting cells and for rendering, after rendering,
-cell attributes can be entirely discarded. This may mean those attributes can be stored
-within a vector and use a sort of binary search or lookup for the already-in-use attributes,
-thus saving memory.
-*/
+// Credit: zesterer (Joshua Baretto)
+#[derive(Clone)]
+struct Grid {
+    size: Extent2<usize>,
+    cells: Vec<Cell>,
+}
 
-#[derive(Debug)]
+impl Grid {
+    pub fn new(size: Extent2<usize>) -> Self {
+        Self {
+            size,
+            cells: vec![Cell::default(); size.w * size.h],
+        }
+    }
+
+    pub fn size(&self) -> Extent2<usize> {
+        self.size
+    }
+
+    pub fn resize(&mut self, new_size: Extent2<usize>) {
+        self.cells.resize(new_size.w * new_size.h, Cell::default());
+        self.size = new_size;
+    }
+
+    fn idx_of(&self, pos: Vec2<usize>) -> Option<usize> {
+        if pos.map2(self.size.into(), |e, sz| e < sz).reduce_and() {
+            Some(self.size.w * pos.y + pos.x)
+        } else {
+            None
+        }
+    }
+
+    pub fn get(&self, pos: impl Into<Vec2<usize>>) -> Cell {
+        match self.idx_of(pos.into()) {
+            Some(idx) => self.cells
+                .get(idx)
+                .copied()
+                .unwrap_or(Cell::default()),
+            None => Cell::default(),
+        }
+    }
+
+    pub fn get_mut(&mut self, pos: impl Into<Vec2<usize>>) -> &mut Cell {
+        match self.idx_of(pos.into()) {
+            Some(idx) => self.cells
+                .get_mut(idx)
+                .unwrap(),
+            None => panic!("Unable to get cell mutably: out of bounds"),
+        }
+    }
+
+    pub fn set(&mut self, pos: impl Into<Vec2<usize>>, cell: Cell) {
+        match self.idx_of(pos.into()) {
+            Some(idx) => {
+                self.cells
+                    .get_mut(idx)
+                    .map(|c| *c = cell);
+            },
+            None => {},
+        }
+    }
+}
+
+/// When we need to access already rendered cells on the terminal, we require a double buffer.
+/// The double buffer represents two things: what has already been rendered to the terminal,
+/// and what we're going to render to the terminal next. This is important for rendering
+/// shadows, where we require the character, background, and foreground of a soon-to-be rendered
+/// character cell.
 pub struct RenderBuffer {
     /// The size of the buffer should match the dimensions of the terminal.
-    size: (usize, usize),
-    xchg: Vec<bool>, // Columns with changes if true, no changes if false
-    ychg: Vec<bool>, // Rows with changes if true, no changes if false
-    fg:   Fg,
-    bg:   Bg,
-    data: Vec<Vec<Cell>>, // NOTE: optimize for at most around (500, 100) cells
+    size:  Extent2<usize>,
+    // grids.0 is the 'front', and represents what has already been drawn.
+    // grids.1 is the 'back', and represents the immediate that has not yet been drawn.
+    grids: (Grid, Grid),
+    fg:    Fg,
+    bg:    Bg,
 }
 
 impl RenderBuffer {
     #[inline]
     pub fn new(size: (usize, usize)) -> RenderBuffer {
-        let mut buf = RenderBuffer { size: (0, 0), xchg: Vec::new(), ychg: Vec::new(), fg: DEFAULT_FG, bg: DEFAULT_BG, data: Vec::new() };
-        buf.resize(size);
-        buf
+        let size = Extent2::from(size);
+        let grid = Grid::new(size);
+        RenderBuffer { size, grids: (grid.clone(), grid), fg: DEFAULT_FG, bg: DEFAULT_BG }
     }
 
     /// Truncate cells or append new blank cells to the buffer to fit
     /// within the bounds of the given new size.
-    pub fn resize(&mut self, new_size: (usize, usize)) {
-        if new_size.0 != self.size.0 { // If width has changed
-            for row in self.data.iter_mut() {
-                row.resize(new_size.0, DEFAULT_CELL.clone()); // Append or truncate columns
-            }
-            self.xchg.resize(new_size.0, false);
-        }
-        if new_size.1 != self.size.1 { // If height has changed
-            self.data.resize(new_size.1, vec![DEFAULT_CELL.clone(); new_size.0]); // Append or truncate rows
-            self.ychg.resize(new_size.1, false);
-        }
+    pub fn resize(&mut self, new_size: Extent2<usize>) {
+        self.grids.0.resize(new_size);
+        self.grids.1.resize(new_size);
         self.size = new_size;
-    }
-
-    #[inline]
-    pub fn get_cell(&mut self, row: usize, col: usize) -> &Cell {
-       &self.data[row][col]
-    }
-
-    pub fn set_cell(&mut self, row: usize, col: usize, new: char) {
-        self.data[row][col] = Cell { ch: new, fg: self.fg, bg: self.bg }; // TODO: prevent copies and try references?
-        self.xchg[col] = true;
-        self.ychg[row] = true;
-    }
-
-    pub fn set_cells(&mut self, row: usize, starting_col: usize, new: &str) {
-        let mut chars = new.chars();
-        for (i, col) in self.data[row][starting_col..starting_col+new.len()].iter_mut().enumerate() {
-            *col = Cell { ch: chars.next().unwrap(), fg: self.fg, bg: self.bg };
-            self.xchg[starting_col+i] = true;
-        }
-        self.ychg[row] = true;
     }
 
     pub fn set_fg(&mut self, fg: Color) {
@@ -130,31 +156,79 @@ impl RenderBuffer {
         self.bg = Bg(bg);
     }
 
-    #[inline]
-    fn clear_changes(&mut self) {
-        for v in self.xchg.iter_mut() { *v = true; }
-        for v in self.ychg.iter_mut() { *v = true; }
+    #[inline(always)]
+    pub fn set_cell(&mut self, pos: impl Into<Vec2<usize>>, ch: char) {
+        self.grids.1.set(pos, Cell(ch, self.fg, self.bg))
     }
 
-    /// Generate ANSI instructions and text from changed cells.
-    fn gen_ansi(&self) -> String {
-        let mut output = String::new();
-        for y in self.ychg.iter().enumerate().filter_map(|(i,&v)| if v == true { Some(i) } else { None }) {
-            for (x, cell) in self.xchg.iter().enumerate().filter_map(|(x,&v)| if v == true { Some((x, &self.data[y][x])) } else { None }).peekable() {
-                output.push_str(&format!("{}{}{}{}", termion::cursor::Goto((x+1) as u16, (y+1) as u16), cell.fg, cell.bg, cell.ch));
+    pub fn draw(&mut self, origin: (usize, usize), draw: Draw) {
+        match draw {
+            Draw::Text(s) => for (i, c) in s.chars().enumerate() {
+                self.set_cell((origin.0 + i, origin.1), c);
+            },
+            Draw::Rect(w, h) => for x in 0..w {
+                for y in 0..h {
+                    self.set_cell((origin.0 + x, origin.1 + y), ' ');
+                }
+            },
+        }
+    }
+
+    pub fn render_ansi(&mut self) -> String {
+        let mut out = String::new();
+        
+        // Instead of zero, we want a completely incorrect value so we set the cursor on first column encountered.
+        let mut last_pos = Vec2::one();
+        let mut last_fg = DEFAULT_FG;
+        let mut last_bg = DEFAULT_BG;
+
+        for row in 0..self.size.h {
+            for col in 0..self.size.w {
+                let (front, back) = (self.grids.0.get_mut((col, row)), self.grids.1.get((col, row)));
+
+                if *front != back {
+                    if last_pos != Vec2::new(col.saturating_sub(1), row) { // If this cell didn't follow immediately after the last (cursor optimization)
+                        out.push_str(&format!("{}", cursor::Goto(col as u16 + 1, row as u16 + 1)));
+                    }
+
+                    let Cell(c, fg, bg) = back;
+                    
+                    // Color and attributes optimizations. We don't want to write
+                    // an ANSI color value for every character we draw. So we do this to
+                    // minimize the number of ANSI escape sequences we generate.
+                    if last_fg != fg {
+                        out.push_str(&format!("{}", fg));
+                        last_fg = fg;
+                    }
+                    if last_bg != bg {
+                        out.push_str(&format!("{}", bg));
+                        last_bg = bg;
+                    }
+                    out.push(c); // Write the character
+
+                    *front = back; // Copy cells from the current buffer to the other
+
+                    last_pos = Vec2::new(col, row); // Update last position
+                }
             }
         }
-        dbg!(&output);
-        output
+
+        // self.grids.0 = self.grids.1.clone(); // TODO copy when drawing cells above
+        dbg!(&out);
+        out
     }
 
     pub fn render(&mut self) {
         let stdout = std::io::stdout();
         let mut handle = stdout.lock();
 
-        handle.write_all(self.gen_ansi().as_bytes()).unwrap();
+        handle.write_all(self.render_ansi().as_bytes()).unwrap();
         handle.flush().unwrap();
-
-        self.clear_changes();
     }
+}
+
+/// Different drawing modes for creating shapes and text on the terminal.
+pub enum Draw<'a> {
+    Text(&'a str),
+    Rect(usize, usize),
 }

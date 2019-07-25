@@ -21,11 +21,11 @@ fn main() {
     let screen = screen::AlternateScreen::from(stdout().into_raw_mode().unwrap());
 
     let mut render_buffer = render::RenderBuffer::new((size.0 as usize, size.1 as usize));
-    render_buffer.set_cell(1, 1, 'F');
-    // render_buffer.set_attr(CellAttr { fg: Fg(Color::Blue), bg: Bg(Color::Black) });
+    render_buffer.set_cell((1, 1), 'F');
     render_buffer.set_fg(Color::Blue);
-    render_buffer.set_cells(2, 1, "This is a test...");
-    render_buffer.set_cells(3, 0, &format!("{}", std::mem::size_of_val(&render_buffer)));
+    render_buffer.draw((1, 2), Draw::Text("This is a test..."));
+    render_buffer.set_bg(Color::LightWhite);
+    render_buffer.draw((3, 3), Draw::Rect(3, 3));
 
     render_buffer.render();
     std::thread::sleep(std::time::Duration::from_secs(3));
