@@ -18,10 +18,26 @@ pub struct Bg(pub Color);
 impl std::fmt::Display for Fg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
-            Color::White => color::Fg(color::White).fmt(f),
-            Color::Black => color::Fg(color::Black).fmt(f),
-            Color::LightWhite => color::Fg(color::LightWhite).fmt(f),
-            Color::Blue => color::Fg(color::Blue).fmt(f),
+            Color::AnsiValue(v) => color::Fg(color::AnsiValue(v)).fmt(f),
+            // Color::RGB(r,g,b)   => color::Fg(color::Rgb(r,g,b)).fmt(f),
+
+            Color::White   => color::Fg(color::White).fmt(f),
+            Color::Black   => color::Fg(color::Black).fmt(f),
+            Color::Blue    => color::Fg(color::Blue).fmt(f),
+            Color::Cyan    => color::Fg(color::Cyan).fmt(f),
+            Color::Green   => color::Fg(color::Green).fmt(f),
+            Color::Magenta => color::Fg(color::Magenta).fmt(f),
+            Color::Red     => color::Fg(color::Red).fmt(f),
+            Color::Yellow  => color::Fg(color::Yellow).fmt(f),
+
+            Color::LightWhite   => color::Fg(color::LightWhite).fmt(f),
+            Color::LightBlack   => color::Fg(color::LightBlack).fmt(f),
+            Color::LightBlue    => color::Fg(color::LightBlue).fmt(f),
+            Color::LightCyan    => color::Fg(color::LightCyan).fmt(f),
+            Color::LightGreen   => color::Fg(color::LightGreen).fmt(f),
+            Color::LightMagenta => color::Fg(color::LightMagenta).fmt(f),
+            Color::LightRed     => color::Fg(color::LightRed).fmt(f),
+            Color::LightYellow  => color::Fg(color::LightYellow).fmt(f),
         }
     }
 }
@@ -29,20 +45,54 @@ impl std::fmt::Display for Fg {
 impl std::fmt::Display for Bg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
-            Color::White => color::Bg(color::White).fmt(f),
-            Color::Black => color::Bg(color::Black).fmt(f),
-            Color::LightWhite => color::Bg(color::LightWhite).fmt(f),
-            Color::Blue => color::Bg(color::Blue).fmt(f),
+            Color::AnsiValue(v) => color::Bg(color::AnsiValue(v)).fmt(f),
+            // Color::RGB(r,g,b)   => color::Bg(color::Rgb(r,g,b)).fmt(f),
+
+            Color::White   => color::Bg(color::White).fmt(f),
+            Color::Black   => color::Bg(color::Black).fmt(f),
+            Color::Blue    => color::Bg(color::Blue).fmt(f),
+            Color::Cyan    => color::Bg(color::Cyan).fmt(f),
+            Color::Green   => color::Bg(color::Green).fmt(f),
+            Color::Magenta => color::Bg(color::Magenta).fmt(f),
+            Color::Red     => color::Bg(color::Red).fmt(f),
+            Color::Yellow  => color::Bg(color::Yellow).fmt(f),
+
+            Color::LightWhite   => color::Bg(color::LightWhite).fmt(f),
+            Color::LightBlack   => color::Bg(color::LightBlack).fmt(f),
+            Color::LightBlue    => color::Bg(color::LightBlue).fmt(f),
+            Color::LightCyan    => color::Bg(color::LightCyan).fmt(f),
+            Color::LightGreen   => color::Bg(color::LightGreen).fmt(f),
+            Color::LightMagenta => color::Bg(color::LightMagenta).fmt(f),
+            Color::LightRed     => color::Bg(color::LightRed).fmt(f),
+            Color::LightYellow  => color::Bg(color::LightYellow).fmt(f),
         }
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Color {
+    // Advanced
+    AnsiValue(u8),
+    // RGB(u8, u8, u8), // NOTE: use AnsiValue instead
+    // Basics
     White,
     Black,
-    LightWhite,
     Blue,
+    Cyan,
+    Green,
+    Magenta,
+    Red,
+    Yellow,
+    // Lights
+    LightWhite,
+    LightBlack,
+    LightBlue,
+    LightCyan,
+    LightGreen,
+    LightMagenta,
+    LightRed,
+    LightYellow
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
