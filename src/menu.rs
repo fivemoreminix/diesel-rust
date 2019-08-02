@@ -22,6 +22,9 @@ pub enum Action {
     // File
     Close, New, Save, SaveAs, Open,
 
+    // Edit
+    Undo, Redo,
+
     // Help
     About,
 

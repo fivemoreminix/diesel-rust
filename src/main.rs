@@ -36,13 +36,6 @@ fn main() {
 
     let mut screen = screen::AlternateScreen::from(stdout().into_raw_mode().unwrap());
     let mut size = terminal_size().unwrap();
-
-    let argv = std::env::args().collect::<Vec<String>>();
-    let buf = if argv.len() <= 1 {
-        scribe::Buffer::new()
-    } else {
-        scribe::Buffer::from_file(std::path::Path::new(&argv[1])).unwrap()
-    };
     
     let mut viewport_manager = ViewportManager {
         origin: (1, 2),
@@ -50,6 +43,14 @@ fn main() {
         viewports: Vec::new(),
         focus_index: 0,
     };
+
+    let argv = std::env::args().collect::<Vec<String>>();
+    let buf = if argv.len() <= 1 {
+        scribe::Buffer::new()
+    } else {
+        scribe::Buffer::from_file(std::path::Path::new(&argv[1])).unwrap()
+    };
+    viewport_manager.new_viewport(ViewportData::Buffer(buf));
 
     // Create and instantiate the default menu bar
     let file = (
@@ -69,7 +70,10 @@ fn main() {
     let edit = (
         "_Edit".to_owned(),
         menu::Menu {
-            children: vec!(),
+            children: vec!(
+                ("_Undo".to_owned(), menu::MenuAction::Action(menu::Action::Undo)),
+                ("_Redo".to_owned(), menu::MenuAction::Action(menu::Action::Redo)),
+            ),
         },
     );
     let help = (
@@ -130,7 +134,13 @@ fn main() {
                                 Save => viewport_manager.get_focused_viewport_mut().unwrap().save().unwrap(),
                                 Open => {
                                     if let Some(path) = util::input(&mut screen, "Open file", String::new(), util::InputType::Path) {
-                                        util::alert(&mut screen, "You entered", &format!("{:?}", path));
+                                        let path = std::path::PathBuf::from(path);
+                                        if path.is_file() {
+                                            let buf = scribe::Buffer::from_file(&path).unwrap();
+                                            viewport_manager.new_viewport(ViewportData::Buffer(buf));
+                                        } else {
+                                            util::alert(&mut screen, "Only accepts files", &format!("You entered {:?}, which is a directory.", path));
+                                        }
                                     }
                                 }
 
