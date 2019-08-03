@@ -121,8 +121,11 @@ fn main() {
                 k if !in_menu_mode => viewport_manager.handle_key_event(k),
                 k => {
                     // High-level action handling
-                    if let Some((menu, x_offset)) = menu_bar.maybe_handle_key_press(k) {
-                        if let Some(action) = menu.take_over(&mut screen, x_offset) {
+                    if let Some((menu_idx, x_offset)) = menu_bar.maybe_handle_key_press(k) {
+                        // The menu bar should have set its selection index to the menu at this point, and is re-rendered all while calling 'maybe_handle_key_press'
+                        menu_bar.render(&mut screen, (1, 1), size.0 as usize, in_menu_mode);
+
+                        if let Some(action) = menu_bar.menus[menu_idx].1.take_over(&mut screen, x_offset) {
                             use menu::Action::*;
                             match action {
                                 Close => if viewport_manager.viewports.is_empty() { break } else { viewport_manager.close_focused_viewport() },

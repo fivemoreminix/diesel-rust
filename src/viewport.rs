@@ -4,6 +4,18 @@ use std::io::Write;
 use std::cmp;
 use std::collections::BTreeMap;
 
+// Helper functions because float min and max is used in this source file.
+
+#[inline]
+fn flt_max(a: f32, b: f32) -> f32 {
+    if a < b { b } else { a }
+}
+
+#[inline]
+fn flt_min(a: f32, b: f32) -> f32 {
+    if a > b { b } else { a }
+}
+
 /// The different types a Viewport can be, and their associated data.
 pub enum ViewportData {
     Buffer(scribe::Buffer),
@@ -122,6 +134,17 @@ impl Viewport {
         }
     }
 
+    pub fn vertical_scroll_percent(&self) -> f32 {
+        match &self.data {
+            Buffer(buffer) => {
+                let lines = buffer.line_count();
+                // basically a min(1.0, the_expression)
+                flt_min(1.0, (self.starting_visible_line + self.size.1 - 1) as f32 / lines as f32)
+            }
+            Terminal(_) => unimplemented!(),
+        }
+    }
+
     /// Insert the given character at the current cursor position or selection.
     pub fn insert(&mut self, ch: char) {
         match self.data {
@@ -236,6 +259,15 @@ impl ViewportManager {
                 }
             }
         }
+
+        // Draw the scrollbars
+        // Scrollbar height must be between 1 and v_size.1 (height of viewport).
+        let scrollbar_height: usize = flt_min((v_size.1 - 1) as f32, flt_max(1.0, v_size.1 as f32 * (v_size.1 as f32 / self.viewports[self.focus_index].get_buffer().unwrap().line_count() as f32))) as usize;
+        let scrollbar_v_origin: u16 = v_origin.1 + ((v_size.1 as u16) as f32 * self.viewports[self.focus_index].vertical_scroll_percent()) as u16 - scrollbar_height as u16;
+        for i in 0..scrollbar_height {
+            write!(s, "{}X", cursor::Goto(v_origin.0 + v_size.0 as u16, i as u16 + scrollbar_v_origin)).unwrap();
+        }
+        write!(s, "{}scroll% = {}", cursor::Goto(v_origin.0, v_origin.1 + v_size.1 as u16), self.viewports[self.focus_index].vertical_scroll_percent() * 100.0).unwrap();
 
         self.viewports[self.focus_index].render(s, has_focus);
     }

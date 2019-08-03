@@ -105,12 +105,12 @@ impl MenuBar {
         }
     }
 
-    /// Returns a menu and the origin X offset of the menu, for rendering the menu in the correct position.
-    pub fn maybe_handle_key_press(&mut self, key: Key) -> Option<(&Menu, u16)> {
+    /// Returns a menu index and the origin X offset of the menu, for rendering the menu in the correct position.
+    pub fn maybe_handle_key_press(&mut self, key: Key) -> Option<(usize, u16)> {
         match key {
             Key::Right => if self.selection_index + 1 >= self.menus.len() { self.selection_index = 0; } else { self.selection_index += 1; },
             Key::Left => if self.selection_index as isize - 1 < 0 { self.selection_index = self.menus.len()-1; } else { self.selection_index -= 1; },
-            Key::Char('\n') => return Some((&self.menus[self.selection_index].1, self.get_origin_x_of_menu(self.selection_index))),
+            Key::Char('\n') => return Some((self.selection_index, self.get_origin_x_of_menu(self.selection_index))),
             Key::Char(key) => {
                 let key = key.to_lowercase().next().unwrap();
                 for (i, (c, menu)) in self
@@ -120,10 +120,8 @@ impl MenuBar {
                     .enumerate()
                 {
                     if c.to_lowercase().next().unwrap() == key {
-                        // Position menu's origin to directly beneath the menu bar's item
-                        
-
-                        return Some((menu, self.get_origin_x_of_menu(i)));
+                        self.selection_index = i;
+                        return Some((i, self.get_origin_x_of_menu(i)));
                     }
                 }
             }
@@ -199,7 +197,13 @@ impl Menu {
                     },
 
                     // Activate an action or sub-menu expansion using a shortcut.
-                    Key::Char(c) => if let Some(menu_action) = self.maybe_handle_key_press(c) {
+                    Key::Char(c) => if let Some(menu_index) = self.maybe_handle_key_press(c) {
+                        // Update selection index to the menu action we just pressed
+                        selection_index = menu_index;
+                        // Redraw with new selection index
+                        self.render(s, (x_offset, 2), selection_index);
+
+                        let menu_action = &self.children[menu_index].1;
                         match menu_action {
                             MenuAction::Separator => unreachable!(),
                             MenuAction::Action(action) => return Some(action),
@@ -248,15 +252,16 @@ impl Menu {
 
     /// Returns `true` if the key press was correctly handled,
     /// or `false` if the key could not be handled (or was not recognized).
-    fn maybe_handle_key_press(&self, key: char) -> Option<&MenuAction> {
+    fn maybe_handle_key_press(&self, key: char) -> Option<(usize)> {
         let key = key.to_lowercase().next().unwrap();
-        for (c, menu) in self
+        for (c, menu_index) in self
             .children
             .iter()
-            .filter_map(|(s, a)| match a { MenuAction::Separator=>None, _=>Some((get_menu_shortcut_from_name(s), a)) }) // Ignore separators, too
+            .enumerate()
+            .filter_map(|(menu_index, (s, a))| match a { MenuAction::Separator=>None, _=>Some((get_menu_shortcut_from_name(s), menu_index)) }) // Ignore separators, too
         {
             if c.to_lowercase().next().unwrap() == key {
-                return Some(menu);
+                return Some(menu_index);
             }
         }
         None
