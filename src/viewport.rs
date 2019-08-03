@@ -73,20 +73,25 @@ impl Viewport {
                 // Render the lines from the text
                 // TODO: need a much more efficient way of rendering the lines without constructing all of them
                 // write text line by line with line numbers
-                for (i, mut l) in scribe::util::LineIterator::new(&buffer.data()).skip(self.starting_visible_line).take(self.size.1 - 1) {
+                for (i, l) in scribe::util::LineIterator::new(&buffer.data()).skip(self.starting_visible_line).take(self.size.1 - 1) {
+                    let mut l = l.to_owned();
+
                     if self.starting_visible_column + 1 > l.len() { // (+ 1 to prevent subtraction overflow when doing - 1 on l.len())
                         continue; // We don't want to render an empty line (nor index one!)
                     } else {
                         // The line fits within view, so we need to trim it down based on how far we've scrolled right
-                        l = &l[self.starting_visible_column..]; // We know the line must begin at the first visible column...
-                        if l.len() >= self.size.0 - 5 {
-                            l = &l[..cmp::min(l.len()-1, self.size.0 - 5 - 1)]; // Cut either the entire line, or whatever can fit within view
+                        let line_length = l.len() - self.starting_visible_column;
+                        let chars = l.chars().skip(self.starting_visible_column);
+                        l = if line_length >= self.size.0 - 5 {
+                            chars.take(cmp::min(l.len()-1, self.size.0 - 5 - 1)).collect() // Cut either the entire line, or whatever can fit within view
+                        } else {
+                            chars.collect()
                         }
                     }
 
                     write!(
                         s,
-                        "{} {}{}{:>lcount$}{} {}{}",
+                        "{}{}{}{:>lcount$}{} {}{}",
                         cursor::Goto(self.origin.0, self.origin.1 + (i - self.starting_visible_line) as u16),
                         color::Fg(color::White),
                         if focused { format!("{}", style::Bold) } else { "".to_owned() }, // Bold the line number
@@ -99,12 +104,12 @@ impl Viewport {
                     .unwrap();
 
                     // Horizontal scrolling indicators
-                    if self.starting_visible_column > 0 {
-                        write!(s, "{}{}{}", cursor::Goto(self.origin.0 + 5, self.origin.1 + (i - self.starting_visible_line) as u16), color::Fg(color::Yellow), "<").unwrap();
-                    }
-                    if l.len() > self.size.0 - 5 {
-                        write!(s, "{}{}{}", cursor::Goto(self.origin.0 + self.size.0 as u16 - 1, self.origin.1 + (i - self.starting_visible_line) as u16), color::Fg(color::Yellow), ">").unwrap();
-                    }
+                    // if self.starting_visible_column > 0 {
+                    //     write!(s, "{}{}{}", cursor::Goto(self.origin.0 + 5, self.origin.1 + (i - self.starting_visible_line) as u16), color::Fg(color::Yellow), "<").unwrap();
+                    // }
+                    // if l.len() > self.size.0 - 5 {
+                    //     write!(s, "{}{}{}", cursor::Goto(self.origin.0 + self.size.0 as u16 - 1, self.origin.1 + (i - self.starting_visible_line) as u16), color::Fg(color::Yellow), ">").unwrap();
+                    // }
                 }
 
                 if focused {
@@ -295,7 +300,8 @@ impl ViewportManager {
         self.viewports.get_mut(self.focus_index)
     }
 
-    pub fn new_viewport(&mut self, data: ViewportData) {
+    /// Create a new viewport with the given data. Returns the index of the new viewport.
+    pub fn new_viewport(&mut self, data: ViewportData) -> usize {
         self.viewports.push(Viewport {
             origin: (self.origin.0 + 1, self.origin.1 + 1),
             size: (self.size.0 - 1, self.size.1 - 2),
@@ -303,6 +309,7 @@ impl ViewportManager {
             starting_visible_line: 0,
             starting_visible_column: 0,
         });
+        self.viewports.len()-1 // Return the index of the created viewport
     }
 
     pub fn close_focused_viewport(&mut self) {
