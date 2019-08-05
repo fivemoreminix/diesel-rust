@@ -100,7 +100,7 @@ impl MenuBar {
             terminal_size().unwrap().0 - 7
         } else {
             (1 + self.menus.iter().take(idx).map(|(name, _)| name.len()).sum::<usize>() // We have a single space before menus are listed off
-            + (idx + 1) * 1) // For spaces before and after names (number of items * 1)
+            + (idx + 1)) // For spaces before and after names (number of items)
             as u16
         }
     }

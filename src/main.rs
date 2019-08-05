@@ -13,23 +13,21 @@ mod util;
 mod viewport;
 mod render;
 
-use viewport::{ViewportData, ViewportManager};
+use viewport::{Viewport, ViewportData, ViewportManager};
 use render::*;
 
-// fn main() {
-//     let size = terminal_size().unwrap();
-//     let screen = screen::AlternateScreen::from(stdout().into_raw_mode().unwrap());
-
-//     let mut render_buffer = render::RenderBuffer::new((size.0 as usize, size.1 as usize));
-//     render_buffer.set_cell((1, 1), 'F');
-//     render_buffer.set_fg(Color::Blue);
-//     render_buffer.draw((1, 2), Draw::Text("This is a test..."));
-//     render_buffer.set_bg(Color::LightWhite);
-//     render_buffer.draw((3, 3), Draw::Rect(3, 3));
-
-//     render_buffer.render();
-//     std::thread::sleep(std::time::Duration::from_secs(3));
-// }
+/// Returns true if the Viewport actually saved the file, or false if the user cancelled.
+fn viewport_save_as(viewport: &mut Viewport) -> bool {
+    if let Some(file_path_str) = util::input(&mut stdout(), &format!("Save file '{}'", "Untitled"), "./Untitled".to_owned(), util::InputType::Any) {
+        let file_path = std::path::PathBuf::from(file_path_str);
+        let mut file = std::fs::File::create(&file_path).unwrap(); // Create the file on disk
+        file.write_all(viewport.get_buffer().expect("Cannot save a Viewport with no buffer.").data().as_bytes()).expect("Failed to write buffer data into new save file on disk!");
+        viewport.data = ViewportData::Buffer(scribe::Buffer::from_file(&file_path).unwrap());
+        true
+    } else { // If the user inputs no save file path, we do nothing
+        false
+    }
+}
 
 fn main() {
     panic::set_hook(Box::new(|panic_info| util::alert(&mut stdout(), "Panic!", &format!("{}{}", cursor::Show, panic_info))));
@@ -134,7 +132,26 @@ fn main() {
                                     viewport_manager.new_viewport(ViewportData::Buffer(scribe::Buffer::new())); // Add viewport
                                     viewport_manager.focus_index = viewport_manager.viewports.len()-1; // Set focus to last viewport
                                 }
-                                Save => viewport_manager.get_focused_viewport_mut().unwrap().save().unwrap(),
+                                Save => {
+                                    if let Some(viewport) = viewport_manager.get_focused_viewport_mut() {
+                                        if let Some(buf) = viewport.get_buffer() {
+                                            if buf.modified() { // Only do this code if the buffer is dirty
+                                                if let Some(_) = buf.file_name() { // This buffer points to a file on disk
+                                                    buf.save().unwrap();
+                                                } else { // This buffer points to no files on disk
+                                                    viewport_save_as(viewport);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                SaveAs => {
+                                    if let Some(viewport) = viewport_manager.get_focused_viewport_mut() {
+                                        if viewport.get_buffer().is_some() {
+                                            viewport_save_as(viewport);
+                                        }
+                                    }
+                                }
                                 Open => {
                                     if let Some(path) = util::input(&mut screen, "Open file", String::new(), util::InputType::Path) {
                                         let path = std::path::PathBuf::from(path);

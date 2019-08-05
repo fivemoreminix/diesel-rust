@@ -33,6 +33,7 @@ pub struct Viewport {
     // Common Viewport properties
     pub origin: (u16, u16),
     pub size: (usize, usize),
+    pub title: String,
 
     // What does this Viewport represent?
     pub data: ViewportData,
@@ -70,11 +71,14 @@ impl Viewport {
                     }
                 }
 
+                // Gather the line numbers for the visible portion of the screen.
+                let buf_data = buffer.data();
+                let lines: Vec<(usize, &str)> = scribe::util::LineIterator::new(&buf_data).skip(self.starting_visible_line).take(self.size.1 - 1).collect();
+                let line_num_digits = lines.iter().map(|(n, _)| n + 1).max().unwrap_or(1).to_string().len();
+
                 // Render the lines from the text
-                // TODO: need a much more efficient way of rendering the lines without constructing all of them
-                // write text line by line with line numbers
-                for (i, l) in scribe::util::LineIterator::new(&buffer.data()).skip(self.starting_visible_line).take(self.size.1 - 1) {
-                    let mut l = l.to_owned();
+                for (i, l) in &lines {
+                    let mut l: String = l.to_string();
 
                     if self.starting_visible_column + 1 > l.len() { // (+ 1 to prevent subtraction overflow when doing - 1 on l.len())
                         continue; // We don't want to render an empty line (nor index one!)
@@ -99,17 +103,9 @@ impl Viewport {
                         style::NoBold,
                         if focused { format!("{}", color::Fg(color::LightWhite)) } else { "".to_owned() },
                         l,
-                        lcount = 3, // The right align space needed for the line number
-                    ) // TODO: think about lines that are LESS than the visibility
+                        lcount = line_num_digits, // The right align space needed for the line number
+                    )
                     .unwrap();
-
-                    // Horizontal scrolling indicators
-                    // if self.starting_visible_column > 0 {
-                    //     write!(s, "{}{}{}", cursor::Goto(self.origin.0 + 5, self.origin.1 + (i - self.starting_visible_line) as u16), color::Fg(color::Yellow), "<").unwrap();
-                    // }
-                    // if l.len() > self.size.0 - 5 {
-                    //     write!(s, "{}{}{}", cursor::Goto(self.origin.0 + self.size.0 as u16 - 1, self.origin.1 + (i - self.starting_visible_line) as u16), color::Fg(color::Yellow), ">").unwrap();
-                    // }
                 }
 
                 if focused {
@@ -118,7 +114,7 @@ impl Viewport {
                         s,
                         "{}{}",
                         cursor::Goto(
-                            self.origin.0 + 4 + (buffer.cursor.position.offset - self.starting_visible_column) as u16 + 1,
+                            self.origin.0 + line_num_digits as u16 + (buffer.cursor.position.offset - self.starting_visible_column) as u16 + 1,
                             self.origin.1 + (buffer.cursor.position.line - self.starting_visible_line) as u16,
                         ),
                         cursor::Show
@@ -246,12 +242,13 @@ impl ViewportManager {
 
         {
             let titles: Vec<String> = self.viewports.iter_mut().map(|v| {
-                let buf = v.get_buffer().unwrap();
-                let mut t = buf.file_name().unwrap_or("Untitled".to_owned());
-                if buf.modified() {
-                    t.insert(0, '*');
+            	let mut title = v.title.clone();
+                if let Some(buf) = v.get_buffer() {
+                	if buf.modified() {
+                    	title.insert(0, '*');
+                	}
                 }
-                t
+                title
             }).collect();
             let total_len: usize = titles.len() * 3 + titles.iter().map(|t| t.len()).sum::<usize>(); // The number characters all of the titles will take up
 
@@ -270,9 +267,9 @@ impl ViewportManager {
         let scrollbar_height: usize = flt_min((v_size.1 - 1) as f32, flt_max(1.0, v_size.1 as f32 * (v_size.1 as f32 / self.viewports[self.focus_index].get_buffer().unwrap().line_count() as f32))) as usize;
         let scrollbar_v_origin: u16 = v_origin.1 + ((v_size.1 as u16) as f32 * self.viewports[self.focus_index].vertical_scroll_percent()) as u16 - scrollbar_height as u16;
         for i in 0..scrollbar_height {
-            write!(s, "{}X", cursor::Goto(v_origin.0 + v_size.0 as u16, i as u16 + scrollbar_v_origin)).unwrap();
+            write!(s, "{}X", cursor::Goto(v_origin.0 + v_size.0 as u16 - 1, i as u16 + scrollbar_v_origin)).unwrap();
         }
-        write!(s, "{}scroll% = {}", cursor::Goto(v_origin.0, v_origin.1 + v_size.1 as u16), self.viewports[self.focus_index].vertical_scroll_percent() * 100.0).unwrap();
+        write!(s, "{}scroll% = {}", cursor::Goto(v_origin.0, v_origin.1 + v_size.1 as u16 - 1), self.viewports[self.focus_index].vertical_scroll_percent() * 100.0).unwrap();
 
         self.viewports[self.focus_index].render(s, has_focus);
     }
@@ -305,6 +302,10 @@ impl ViewportManager {
         self.viewports.push(Viewport {
             origin: (self.origin.0 + 1, self.origin.1 + 1),
             size: (self.size.0 - 1, self.size.1 - 2),
+            title: match &data {
+                ViewportData::Buffer(buf) => buf.file_name().unwrap_or("Untitled".to_owned()),
+                ViewportData::Terminal(_) => "Terminal".to_owned(),
+            },
             data,
             starting_visible_line: 0,
             starting_visible_column: 0,
