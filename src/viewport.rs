@@ -18,7 +18,7 @@ fn flt_min(a: f32, b: f32) -> f32 {
 
 /// The different types a Viewport can be, and their associated data.
 pub enum ViewportData {
-    Buffer(scribe::Buffer),
+    Buffer(Box<scribe::Buffer>),
     Terminal(String),
 }
 use ViewportData::*;
@@ -58,7 +58,7 @@ impl Viewport {
                             self.starting_visible_line += buffer.cursor.line - (self.starting_visible_line + (self.size.1 - self.origin.1 as usize)); // Set visible lines to show at least that line
                         }
                     } else { // We need to scroll up, if the cursor is above the minimum visible line
-                        self.starting_visible_line -= self.starting_visible_line - buffer.cursor.line;
+                        self.starting_visible_line = self.starting_visible_line - (self.starting_visible_line - buffer.cursor.line);
                     }
 
                     // Update the cursor: are we out of view horizontally and need to scroll?
@@ -67,20 +67,23 @@ impl Viewport {
                             self.starting_visible_column += buffer.cursor.offset - (self.starting_visible_column + (self.size.0 - 5 - self.origin.0 as usize)); // Set visible columns to show at least that column
                         }
                     } else { // We need to scroll left, if the cursor is to the left of the minimum visible line
-                        self.starting_visible_column -= self.starting_visible_column - buffer.cursor.offset;
+                        self.starting_visible_column = self.starting_visible_column - (self.starting_visible_column - buffer.cursor.offset);
                     }
                 }
 
                 // Gather the line numbers for the visible portion of the screen.
                 let buf_data = buffer.data();
-                let lines: Vec<(usize, &str)> = scribe::util::LineIterator::new(&buf_data).skip(self.starting_visible_line).take(self.size.1 - 1).collect();
-                let line_num_digits = lines.iter().map(|(n, _)| n + 1).max().unwrap_or(1).to_string().len();
+                // let mut lines: Vec<(usize, &str)> = scribe::util::LineIterator::new(&buf_data).skip(self.starting_visible_line).take(self.size.1 - 1).collect();
+                let lines: Vec<&str> = crate::util::lines(&buf_data).into_iter().skip(self.starting_visible_line).take(self.size.1 - 1).collect();
+                // lines.push((lines.len(), ""));
+                // let line_num_digits = lines.iter().map(|(n, _)| n + 1).max().unwrap_or(1).to_string().len();
+                let line_num_digits = lines.len().to_string().len(); // Number of digits in the highest line number
 
                 // Render the lines from the text
-                for (i, l) in &lines {
+                for (i, l) in lines.iter().enumerate() {
                     let mut l: String = l.to_string();
 
-                    if self.starting_visible_column + 1 > l.len() { // (+ 1 to prevent subtraction overflow when doing - 1 on l.len())
+                    if self.starting_visible_column > l.len().saturating_sub(1) {
                         continue; // We don't want to render an empty line (nor index one!)
                     } else {
                         // The line fits within view, so we need to trim it down based on how far we've scrolled right
@@ -95,7 +98,7 @@ impl Viewport {
 
                     write!(
                         s,
-                        "{}{}{}{:>lcount$}{} {}{}",
+                        "{}{}{}{:>digits$}{} {}{}",
                         cursor::Goto(self.origin.0, self.origin.1 + (i - self.starting_visible_line) as u16),
                         color::Fg(color::White),
                         if focused { format!("{}", style::Bold) } else { "".to_owned() }, // Bold the line number
@@ -103,7 +106,7 @@ impl Viewport {
                         style::NoBold,
                         if focused { format!("{}", color::Fg(color::LightWhite)) } else { "".to_owned() },
                         l,
-                        lcount = line_num_digits, // The right align space needed for the line number
+                        digits = line_num_digits, // The right align space needed for the line number
                     )
                     .unwrap();
                 }
@@ -265,7 +268,7 @@ impl ViewportManager {
         // Draw the scrollbars
         // Scrollbar height must be between 1 and v_size.1 (height of viewport).
         let scrollbar_height: usize = flt_min((v_size.1 - 1) as f32, flt_max(1.0, v_size.1 as f32 * (v_size.1 as f32 / self.viewports[self.focus_index].get_buffer().unwrap().line_count() as f32))) as usize;
-        let scrollbar_v_origin: u16 = v_origin.1 + ((v_size.1 as u16) as f32 * self.viewports[self.focus_index].vertical_scroll_percent()) as u16 - scrollbar_height as u16;
+        let scrollbar_v_origin: u16 = v_origin.1 + (f32::from(v_size.1 as u16) * self.viewports[self.focus_index].vertical_scroll_percent()) as u16 - scrollbar_height as u16;
         for i in 0..scrollbar_height {
             write!(s, "{}X", cursor::Goto(v_origin.0 + v_size.0 as u16 - 1, i as u16 + scrollbar_v_origin)).unwrap();
         }
@@ -303,7 +306,7 @@ impl ViewportManager {
             origin: (self.origin.0 + 1, self.origin.1 + 1),
             size: (self.size.0 - 1, self.size.1 - 2),
             title: match &data {
-                ViewportData::Buffer(buf) => buf.file_name().unwrap_or("Untitled".to_owned()),
+                ViewportData::Buffer(buf) => buf.file_name().unwrap_or_else(|| "Untitled".to_owned()),
                 ViewportData::Terminal(_) => "Terminal".to_owned(),
             },
             data,

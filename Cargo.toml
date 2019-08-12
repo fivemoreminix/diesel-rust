@@ -7,6 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 # this was written in QEdit ;)
 
+[profile.release]
+lto = true
+
 [dependencies]
 termion = "1.5.3"
 scribe = "0.7.2"

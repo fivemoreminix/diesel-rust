@@ -22,7 +22,7 @@ fn viewport_save_as(viewport: &mut Viewport) -> bool {
         let file_path = std::path::PathBuf::from(file_path_str);
         let mut file = std::fs::File::create(&file_path).unwrap(); // Create the file on disk
         file.write_all(viewport.get_buffer().expect("Cannot save a Viewport with no buffer.").data().as_bytes()).expect("Failed to write buffer data into new save file on disk!");
-        viewport.data = ViewportData::Buffer(scribe::Buffer::from_file(&file_path).unwrap());
+        viewport.data = ViewportData::Buffer(Box::new(scribe::Buffer::from_file(&file_path).unwrap()));
         true
     } else { // If the user inputs no save file path, we do nothing
         false
@@ -48,7 +48,7 @@ fn main() {
     } else {
         scribe::Buffer::from_file(std::path::Path::new(&argv[1])).unwrap()
     };
-    viewport_manager.new_viewport(ViewportData::Buffer(buf));
+    viewport_manager.new_viewport(ViewportData::Buffer(Box::new(buf)));
 
     // Create and instantiate the default menu bar
     let file = (
@@ -129,14 +129,14 @@ fn main() {
                                 Close => if viewport_manager.viewports.is_empty() { break } else { viewport_manager.close_focused_viewport() },
 
                                 New => {
-                                    viewport_manager.new_viewport(ViewportData::Buffer(scribe::Buffer::new())); // Add viewport
+                                    viewport_manager.new_viewport(ViewportData::Buffer(Box::new(scribe::Buffer::new()))); // Add viewport
                                     viewport_manager.focus_index = viewport_manager.viewports.len()-1; // Set focus to last viewport
                                 }
                                 Save => {
                                     if let Some(viewport) = viewport_manager.get_focused_viewport_mut() {
                                         if let Some(buf) = viewport.get_buffer() {
                                             if buf.modified() { // Only do this code if the buffer is dirty
-                                                if let Some(_) = buf.file_name() { // This buffer points to a file on disk
+                                                if buf.file_name().is_some() { // This buffer points to a file on disk
                                                     buf.save().unwrap();
                                                 } else { // This buffer points to no files on disk
                                                     viewport_save_as(viewport);
@@ -157,7 +157,7 @@ fn main() {
                                         let path = std::path::PathBuf::from(path);
                                         if path.is_file() {
                                             let buf = scribe::Buffer::from_file(&path).unwrap();
-                                            viewport_manager.new_viewport(ViewportData::Buffer(buf));
+                                            viewport_manager.new_viewport(ViewportData::Buffer(Box::new(buf)));
                                         } else {
                                             util::alert(&mut screen, "Only accepts files", &format!("You entered {:?}, which is a directory.", path));
                                         }

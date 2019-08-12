@@ -142,7 +142,7 @@ impl Grid {
             Some(idx) => self.cells
                 .get(idx)
                 .copied()
-                .unwrap_or(Cell::default()),
+                .unwrap_or_default(),
             None => Cell::default(),
         }
     }

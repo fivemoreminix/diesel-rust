@@ -163,7 +163,7 @@ impl Menu {
                                 formatted.push(c);
                             }
                         }
-                        formatted.push_str(&" ".repeat(width - 2 - if name.contains("_") { name.len() - 1 } else { name.len() } ));
+                        formatted.push_str(&" ".repeat(width - 2 - if name.contains('_') { name.len() - 1 } else { name.len() } ));
                         formatted
                     }
                 },
@@ -190,10 +190,9 @@ impl Menu {
                     Key::Char('\n') => match &self.children[selection_index].1 {
                         MenuAction::Separator => unreachable!(),
                         MenuAction::Action(action) => return Some(action),
-                        MenuAction::SubMenu(menu) => match menu.take_over(s, x_offset + self.get_menu_width() as u16) {
-                            Some(action) => return Some(action),
-                            _ => {} // We don't want to close this menu if they exited out of the sub-child one.
-                        },
+                        MenuAction::SubMenu(menu) => if let Some(action) = menu.take_over(s, x_offset + self.get_menu_width() as u16) {
+                            return Some(action);
+                        } // We don't want to close this menu if they exited out of the sub-child one.
                     },
 
                     // Activate an action or sub-menu expansion using a shortcut.
@@ -226,9 +225,8 @@ impl Menu {
     fn previous(&self, mut selection_index: usize) -> usize {
         // Perform reverse wrapping
         if selection_index as isize - 1 < 0 { selection_index = self.children.len()-1; } else { selection_index -= 1; }
-        match self.children[selection_index] { // Skip separators
-            (_, MenuAction::Separator) => return self.previous(selection_index),
-            _ => {}
+        if let (_, MenuAction::Separator) = self.children[selection_index] { // Skip separators
+            return self.previous(selection_index);
         }
         selection_index
     }
@@ -236,16 +234,15 @@ impl Menu {
     fn next(&self, mut selection_index: usize) -> usize {
         // Perform forward selection wrapping
         if selection_index + 1 >= self.children.len() { selection_index = 0; } else { selection_index += 1; }
-        match self.children[selection_index] { // Skip separators (an infinite loop in rare cases)
-            (_, MenuAction::Separator) => return self.next(selection_index),
-            _ => {}
+        if let (_, MenuAction::Separator) = self.children[selection_index] { // Skip separators (an infinite loop in rare cases)
+            return self.next(selection_index);
         }
         selection_index
     }
 
     /// Returns the minimum width of the menu, without counting any underscores.
     fn get_menu_width(&self) -> usize {
-        2 + self.children.iter().map(|(name, _)| if name.contains("_") { name.len() - 1 } else { name.len() }).max().expect(
+        2 + self.children.iter().map(|(name, _)| if name.contains('_') { name.len() - 1 } else { name.len() }).max().expect(
             "Empty menu has no width"
         )
     }

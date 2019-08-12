@@ -6,25 +6,35 @@ use termion::*;
 use std::io::{stdin, Write};
 use std::path::PathBuf;
 
-// pub fn lines(src: &str) -> Vec<&str> {
-//     let mut lines = Vec::new();
-//     let mut current_start = 0usize; // Index of src that is the beginning of the current line
-//     let mut starting_next_line = true; // Index of src that is the end of the current line
+pub fn lines(src: &str) -> Vec<&str> {
+    if src.is_empty() {
+        return vec!("");
+    }
 
-//     let mut chars = src.chars().enumerate();
-//     while let Some((i, c)) = chars.next() {
-//         if starting_next_line {
-//             starting_next_line = false;
-//             current_start = i;
-//         }
-//         if c == '\n' {
-//             lines.push(&src[current_start..i-1]); // Add the entire line (excluding the newline character)
-//             starting_next_line = true;
-//         }
-//     }
+    let mut lines = Vec::new();
+    let mut current_start = 0usize; // Index of src that is the beginning of the current line
+    let mut starting_next_line = true; // Index of src that is the end of the current line
 
-//     lines
-// }
+    let mut chars = src.chars().enumerate();
+    while let Some((i, c)) = chars.next() {
+        if starting_next_line {
+            starting_next_line = false;
+            current_start = i;
+        }
+        if c == '\n' {
+            lines.push(&src[current_start..i]); // Add the entire line (excluding the newline character)
+            starting_next_line = true;
+        }
+    }
+
+    if src.ends_with('\n') {
+        lines.push("");
+    } else if !src[current_start..].is_empty() {
+        lines.push(&src[current_start..]);
+    }
+
+    lines
+}
 
 pub fn draw_rectangle<S: Write>(s: &mut S, color: &dyn Color, origin: (u16, u16), size: (usize, usize)) {
     write!(s, "{}", color::Bg(color)).unwrap();
@@ -122,9 +132,8 @@ pub fn alert<S: Write>(s: &mut S, title: &str, body: &str) {
 
     // Get input
     for k in stdin().keys() {
-        match k.unwrap() {
-            Key::Char('\n') => break,
-            _ => {}
+        if let Key::Char('\n') = k.unwrap() {
+            break;
         }
     }
 }
@@ -194,12 +203,11 @@ pub fn input<S: Write>(s: &mut S, title: &str, initial_input: String, ty: InputT
         for k in stdin().keys() {
             match k.unwrap() {
                 Key::Char('\n') if !button_disabled => return Some(entered_text),
-                Key::Char('\n') => {},
                 Key::Esc => break 'mainloop,
 
                 Key::Char(c) => entered_text.push(c),
                 Key::Backspace if !entered_text.is_empty() => { entered_text.pop().unwrap(); },
-                _ => {}
+                _ => continue,
             }
             continue 'mainloop;
         }
