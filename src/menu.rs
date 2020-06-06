@@ -193,7 +193,7 @@ impl Menu {
                     // Update selection index to the menu action we just pressed
                     selection_index = menu_index;
                     // Redraw with new selection index
-                    self.render(s, (x_offset, 2), selection_index);
+                    self.render(s, (x_offset, 1), selection_index);
 
                     let menu_action = &self.children[menu_index].1;
                     match menu_action {

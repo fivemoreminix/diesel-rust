@@ -112,8 +112,8 @@ pub fn alert<S: Write>(s: &mut S, title: &str, body: &str) {
     draw_rectangle(s, &Color::Grey, (o.0, o.1 + 1), (alert_w, alert_h - 1));
 
     queue!(s,
-        cursor::MoveTo(w/2 - title.len() as u16/2, o.1), style::SetForegroundColor(Color::Black), style::SetBackgroundColor(Color::Grey),
-        style::PrintStyledContent(style::style(title).attribute(style::Attribute::Bold)), style::SetBackgroundColor(Color::Grey),
+        cursor::MoveTo(w/2 - title.len() as u16/2, o.1), style::SetForegroundColor(Color::Black), style::SetBackgroundColor(Color::White),
+        style::Print(title), style::SetBackgroundColor(Color::Grey),
     );
 
     // Write the message text
@@ -184,7 +184,7 @@ pub fn input<S: Write>(s: &mut S, title: &str, initial_input: String, ty: InputT
         queue!(s,
             cursor::MoveTo(w/2 - title.len() as u16/2, o.1),
             style::SetForegroundColor(Color::Black), style::SetBackgroundColor(Color::White),
-            style::PrintStyledContent(style::style(title).attribute(style::Attribute::Bold)),
+            style::Print(title),
         ); // line 1
 
         // Render current entered_text in input box
@@ -207,15 +207,13 @@ pub fn input<S: Write>(s: &mut S, title: &str, initial_input: String, ty: InputT
         s.flush().unwrap();
 
         // Get input
-        loop {
-            match event::read().unwrap() {
-                Event::Key(KeyEvent { code: KeyCode::Enter, .. }) if !button_disabled => return Some(entered_text),
-                Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => break 'mainloop,
+        match event::read().unwrap() {
+            Event::Key(KeyEvent { code: KeyCode::Enter, .. }) if !button_disabled => return Some(entered_text),
+            Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => break 'mainloop,
 
-                Event::Key(KeyEvent { code: KeyCode::Char(c), .. }) => entered_text.push(c),
-                Event::Key(KeyEvent { code: KeyCode::Backspace, .. }) if !entered_text.is_empty() => { entered_text.pop().unwrap(); },
-                _ => continue,
-            }
+            Event::Key(KeyEvent { code: KeyCode::Char(c), .. }) => entered_text.push(c),
+            Event::Key(KeyEvent { code: KeyCode::Backspace, .. }) if !entered_text.is_empty() => { entered_text.pop().unwrap(); },
+            _ => continue,
         }
     }
 

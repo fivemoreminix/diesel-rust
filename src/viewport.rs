@@ -111,6 +111,8 @@ impl Viewport {
                         ),
                         cursor::Show,
                     );
+                    let v = format!("{}", buffer.cursor.position.line);
+                    execute!(s, terminal::SetTitle(&v));
                 }
             }
             Terminal(ref _lines) => unimplemented!(),
@@ -190,17 +192,6 @@ impl Viewport {
             Terminal(ref _lines) => unimplemented!(),
         }
     }
-
-    pub fn save(&mut self) -> std::io::Result<()> {
-        if let Some(b) = self.get_buffer() {
-            if b.path.is_some() {
-                return b.save();
-            } else {
-                crate::util::alert(&mut std::io::stdout(), "Save File", "Untitled file must be saved.");
-            }
-        } // Don't do anything if this is a terminal
-        Ok(())
-    }
 }
 
 /// Manages and renders zero or more viewports at any given time. The Viewport Manager
@@ -264,7 +255,7 @@ impl ViewportManager {
         let scrollbar_height: usize = flt_min((v_size.1 - 1) as f32, flt_max(1.0, v_size.1 as f32 * (v_size.1 as f32 / self.viewports[self.focus_index].get_buffer().unwrap().line_count() as f32))) as usize;
         let scrollbar_v_origin: u16 = v_origin.1 + (f32::from(v_size.1 as u16) * self.viewports[self.focus_index].vertical_scroll_percent()) as u16 - scrollbar_height as u16;
         for i in 0..scrollbar_height {
-            queue!(s, cursor::MoveTo(v_origin.0 + v_size.0 as u16 - 1, i as u16 + scrollbar_v_origin), style::Print("X"));
+            queue!(s, cursor::MoveTo(v_origin.0 + v_size.0 as u16 - 1, i as u16 + scrollbar_v_origin - 1), style::Print("X"));
         }
         queue!(s, cursor::MoveTo(v_origin.0, v_origin.1 + v_size.1 as u16 - 1),
             style::Print(format!("scroll% = {}", self.viewports[self.focus_index].vertical_scroll_percent() * 100.0))
@@ -281,7 +272,9 @@ impl ViewportManager {
         let focused_viewport = &mut self.viewports[self.focus_index];
         match key {
             KeyEvent { code: KeyCode::Char('q'), modifiers: event::KeyModifiers::CONTROL } => self.close_focused_viewport(),
-            KeyEvent { code: KeyCode::Char(c), .. } => focused_viewport.insert(c), // HACKME: not good
+            KeyEvent { code: KeyCode::Char(c), .. } => focused_viewport.insert(c),
+            KeyEvent { code: KeyCode::Enter, .. } => focused_viewport.insert('\n'),
+            KeyEvent { code: KeyCode::Tab, .. } => focused_viewport.insert('\t'),
             KeyEvent { code: KeyCode::Backspace, .. } => focused_viewport.backspace(),
             KeyEvent { code: KeyCode::Delete, .. } => focused_viewport.delete(),
             KeyEvent { code: KeyCode::Up, .. } => focused_viewport.get_buffer().unwrap().cursor.move_up(),
