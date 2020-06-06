@@ -31,14 +31,14 @@ fn main() {
     panic::set_hook(Box::new(|panic_info| util::alert(&mut stdout(), "Panic!", &format!("{}{}", cursor::Show, panic_info))));
 
     terminal::enable_raw_mode().unwrap();
-    execute!(stdout(), terminal::EnterAlternateScreen);
+    execute!(stdout(), cursor::SavePosition, terminal::EnterAlternateScreen);
 
     let mut screen = stdout();
 
     let mut size = terminal::size().unwrap();
     
     let mut viewport_manager = ViewportManager {
-        origin: (1, 2),
+        origin: (0, 1),
         size: (size.0 as usize, size.1 as usize),
         viewports: Vec::new(),
         focus_index: 0,
@@ -110,7 +110,7 @@ fn main() {
         queue!(stdout(), cursor::Hide);
 
         // Update the menu bar
-        menu_bar.render(&mut stdout(), (1, 1), size.0 as usize, in_menu_mode);
+        menu_bar.render(&mut stdout(), (0, 0), size.0 as usize, in_menu_mode);
 
         // Update all viewports
         viewport_manager.size = (size.0 as usize, size.1 as usize);
@@ -184,5 +184,5 @@ fn main() {
         }
     }
 
-    execute!(screen, cursor::Show); // Show the cursor so it is not hidden when out of the editor.
+    execute!(screen, cursor::RestorePosition, terminal::LeaveAlternateScreen, cursor::Show); // Show the cursor so it is not hidden when out of the editor.
 }

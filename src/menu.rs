@@ -75,7 +75,7 @@ impl MenuBar {
                 while let Some(c) = chars.next() {
                     if c == '_' {
                         if focused {
-                            queue!(s, style::PrintStyledContent(style::style(chars.next().unwrap()).with(Color::White)));
+                            queue!(s, style::Print(chars.next().unwrap()));
                         } else {
                             queue!(s, style::Print(chars.next().unwrap()));
                         }
@@ -145,6 +145,7 @@ impl Menu {
             queue!(s, cursor::MoveTo(origin.0 + 1, origin.1 + 1 + i as u16));
             // Background of a selected item is brighter than others
             let (bg, fg) = if i == selection_index { (Color::Black, Color::White) } else { (Color::White, Color::Black) };
+            queue!(s, style::SetForegroundColor(fg), style::SetBackgroundColor(bg));
 
             match a {
                 MenuAction::Separator => queue!(s, style::Print("─".repeat(width - 2))).unwrap(), // width - 2 is the maximum name length
