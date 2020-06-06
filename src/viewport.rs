@@ -1,4 +1,4 @@
-use termion::{*, event::Key};
+use crossterm::{*, style::Color, event::KeyEvent, event::KeyCode};
 
 use std::io::Write;
 use std::cmp;
@@ -48,7 +48,7 @@ impl Viewport {
     pub fn render<S: Write>(&mut self, s: &mut S, focused: bool) {
         match self.data {
             Buffer(ref buffer) => {
-                write!(s, "{}{}", color::Bg(color::Blue), color::Fg(color::White)).unwrap();
+                queue!(s, style::SetBackgroundColor(Color::Blue), style::SetForegroundColor(Color::Grey));
 
                 // Update cursor and scrolling (cursor rendering happens at the end)
                 if focused {
@@ -96,33 +96,23 @@ impl Viewport {
                         }
                     }
 
-                    write!(
-                        s,
-                        "{}{}{}{:>digits$}{} {}{}",
-                        cursor::Goto(self.origin.0, self.origin.1 + (i - self.starting_visible_line) as u16),
-                        color::Fg(color::White),
-                        if focused { format!("{}", style::Bold) } else { "".to_owned() }, // Bold the line number
-                        i + 1,
-                        style::NoBold,
-                        if focused { format!("{}", color::Fg(color::LightWhite)) } else { "".to_owned() },
-                        l,
-                        digits = line_num_digits, // The right align space needed for the line number
-                    )
-                    .unwrap();
+                    let line_number_fmt = format!("{:>digits$}", i + 1, digits = line_num_digits);
+                    queue!(s, cursor::MoveTo(self.origin.0, self.origin.1 + (i - self.starting_visible_line) as u16));
+                    if focused {
+                        queue!(s, style::PrintStyledContent(style::style(line_number_fmt).attribute(style::Attribute::Bold)));
+                    } else {
+                        queue!(s, style::Print(line_number_fmt));
+                    }
                 }
 
                 if focused {
                     // Render the cursor
-                    write!(
-                        s,
-                        "{}{}",
-                        cursor::Goto(
+                    queue!(s, cursor::MoveTo(
                             self.origin.0 + line_num_digits as u16 + (buffer.cursor.position.offset - self.starting_visible_column) as u16 + 1,
                             self.origin.1 + (buffer.cursor.position.line - self.starting_visible_line) as u16,
                         ),
-                        cursor::Show
-                    )
-                    .unwrap();
+                        cursor::Show,
+                    );
                 }
             }
             Terminal(ref _lines) => unimplemented!(),
@@ -239,9 +229,9 @@ impl ViewportManager {
         };
 
         // Draw the inside of the bounding box
-        crate::util::draw_rectangle(s, &color::Blue, (v_origin.0-1, v_origin.1-1), (v_size.0+1, v_size.1+1));
+        crate::util::draw_rectangle(s, &Color::Blue, (v_origin.0-1, v_origin.1-1), (v_size.0+1, v_size.1+1));
         // Draw the Viewport's 'beam' bounding box
-        crate::util::draw_thin_unfilled_rectangle(s, &color::White, &color::Blue, (v_origin.0-1, v_origin.1-1), (v_size.0+1, v_size.1+1));
+        crate::util::draw_thin_unfilled_rectangle(s, &Color::Grey, &Color::Blue, (v_origin.0-1, v_origin.1-1), (v_size.0+1, v_size.1+1));
 
         {
             let titles: Vec<String> = self.viewports.iter_mut().map(|v| {
@@ -258,9 +248,15 @@ impl ViewportManager {
             let starting_x: u16 = v_origin.0 + (v_size.0/2 - total_len/2) as u16;
             for (i, t) in titles.iter().enumerate() {
                 if i == self.focus_index {
-                    write!(s, "{}{}{} {} {}{}", cursor::Goto(starting_x + (i * (t.len() + 3)) as u16, v_origin.1 - 1), color::Fg(color::Blue), color::Bg(color::White), t, color::Fg(color::White), color::Bg(color::Blue)).unwrap();
+                    queue!(s,
+                        cursor::MoveTo(starting_x + (i * (t.len() + 3)) as u16, v_origin.1 - 1), style::SetForegroundColor(Color::Blue), style::SetBackgroundColor(Color::Grey),
+                        style::Print(format!(" {} ", t)),
+                    );
                 } else {
-                    write!(s, "{}┤{}├", cursor::Goto(starting_x + (i * (t.len() + 3)) as u16, v_origin.1 - 1), t).unwrap(); // NOTE: skip a char each time
+                    queue!(s,
+                        cursor::MoveTo(starting_x + (i * (t.len() + 3)) as u16, v_origin.1 - 1),
+                        style::Print(format!("┤{}├", t)), // NOTE: skip a char each time
+                    );
                 }
             }
         }
@@ -270,28 +266,30 @@ impl ViewportManager {
         let scrollbar_height: usize = flt_min((v_size.1 - 1) as f32, flt_max(1.0, v_size.1 as f32 * (v_size.1 as f32 / self.viewports[self.focus_index].get_buffer().unwrap().line_count() as f32))) as usize;
         let scrollbar_v_origin: u16 = v_origin.1 + (f32::from(v_size.1 as u16) * self.viewports[self.focus_index].vertical_scroll_percent()) as u16 - scrollbar_height as u16;
         for i in 0..scrollbar_height {
-            write!(s, "{}X", cursor::Goto(v_origin.0 + v_size.0 as u16 - 1, i as u16 + scrollbar_v_origin)).unwrap();
+            queue!(s, cursor::MoveTo(v_origin.0 + v_size.0 as u16 - 1, i as u16 + scrollbar_v_origin), style::Print("X"));
         }
-        write!(s, "{}scroll% = {}", cursor::Goto(v_origin.0, v_origin.1 + v_size.1 as u16 - 1), self.viewports[self.focus_index].vertical_scroll_percent() * 100.0).unwrap();
+        queue!(s, cursor::MoveTo(v_origin.0, v_origin.1 + v_size.1 as u16 - 1),
+            style::Print(format!("scroll% = {}", self.viewports[self.focus_index].vertical_scroll_percent() * 100.0))
+        );
 
         self.viewports[self.focus_index].render(s, has_focus);
     }
 
-    pub fn handle_key_event(&mut self, key: Key) {
+    pub fn handle_key_event(&mut self, key: KeyEvent) {
         if self.viewports.is_empty() {
             return; // We cannot handle input without viewports
         }
 
         let focused_viewport = &mut self.viewports[self.focus_index];
         match key {
-            Key::Ctrl('q') => self.close_focused_viewport(),
-            Key::Char(c) => focused_viewport.insert(c), // HACKME: not good
-            Key::Backspace => focused_viewport.backspace(),
-            Key::Delete => focused_viewport.delete(),
-            Key::Up => focused_viewport.get_buffer().unwrap().cursor.move_up(),
-            Key::Down => focused_viewport.get_buffer().unwrap().cursor.move_down(),
-            Key::Right => focused_viewport.get_buffer().unwrap().cursor.move_right(),
-            Key::Left => focused_viewport.get_buffer().unwrap().cursor.move_left(),
+            KeyEvent { code: KeyCode::Char('q'), modifiers: event::KeyModifiers::CONTROL } => self.close_focused_viewport(),
+            KeyEvent { code: KeyCode::Char(c), .. } => focused_viewport.insert(c), // HACKME: not good
+            KeyEvent { code: KeyCode::Backspace, .. } => focused_viewport.backspace(),
+            KeyEvent { code: KeyCode::Delete, .. } => focused_viewport.delete(),
+            KeyEvent { code: KeyCode::Up, .. } => focused_viewport.get_buffer().unwrap().cursor.move_up(),
+            KeyEvent { code: KeyCode::Down, .. } => focused_viewport.get_buffer().unwrap().cursor.move_down(),
+            KeyEvent { code: KeyCode::Right, .. } => focused_viewport.get_buffer().unwrap().cursor.move_right(),
+            KeyEvent { code: KeyCode::Left, .. } => focused_viewport.get_buffer().unwrap().cursor.move_left(),
             _ => crate::util::alert(&mut std::io::stdout(), "Unhandled key event", &format!("{:?}", key)),
         }
     }

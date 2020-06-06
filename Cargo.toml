@@ -1,5 +1,5 @@
 [package]
-name = "crewrite"
+name = "diesel"
 version = "0.1.0"
 authors = ["Luke I. Wilson <thelukaswils@gmail.com>"]
 edition = "2018"
@@ -11,7 +11,7 @@ edition = "2018"
 lto = true
 
 [dependencies]
-termion = "1.5.3"
+crossterm = "0.17.5"
 scribe = "0.7.2"
 textwrap = "0.11.0"
 vek = "0.9.8"
