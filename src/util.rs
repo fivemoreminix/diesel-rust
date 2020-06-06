@@ -5,10 +5,8 @@
 
 use crossterm::{*, style::Color, event::Event, event::KeyEvent, event::KeyCode};
 
-use std::io::{stdin, Write};
+use std::io::Write;
 use std::path::PathBuf;
-
-type S = dyn std::io::Write;
 
 pub fn lines(src: &str) -> Vec<&str> {
     if src.is_empty() {
@@ -136,7 +134,7 @@ pub fn alert<S: Write>(s: &mut S, title: &str, body: &str) {
     // Get input
     loop {
         match event::read().unwrap() {
-            Event::Key(KeyEvent { code: KeyCode::Char('\n'), .. }) => break,
+            Event::Key(KeyEvent { code: KeyCode::Enter, .. }) => break,
             _ => {},
         }
     }
@@ -211,7 +209,7 @@ pub fn input<S: Write>(s: &mut S, title: &str, initial_input: String, ty: InputT
         // Get input
         loop {
             match event::read().unwrap() {
-                Event::Key(KeyEvent { code: KeyCode::Char('\n'), .. }) if !button_disabled => return Some(entered_text),
+                Event::Key(KeyEvent { code: KeyCode::Enter, .. }) if !button_disabled => return Some(entered_text),
                 Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => break 'mainloop,
 
                 Event::Key(KeyEvent { code: KeyCode::Char(c), .. }) => entered_text.push(c),

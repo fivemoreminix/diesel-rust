@@ -127,7 +127,7 @@ fn main() {
                 // High-level action handling
                 if let Some((menu_idx, x_offset)) = menu_bar.maybe_handle_key_press(k) {
                     // The menu bar should have set its selection index to the menu at this point, and is re-rendered all while calling 'maybe_handle_key_press'
-                    menu_bar.render(&mut screen, (1, 1), size.0 as usize, in_menu_mode);
+                    menu_bar.render(&mut screen, (0, 0), size.0 as usize, in_menu_mode);
 
                     if let Some(action) = menu_bar.menus[menu_idx].1.take_over(&mut screen, x_offset) {
                         use menu::Action::*;

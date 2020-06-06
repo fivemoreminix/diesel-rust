@@ -2,7 +2,6 @@ use crossterm::{*, style::Color, event::KeyEvent, event::KeyCode};
 
 use std::io::Write;
 use std::cmp;
-use std::collections::BTreeMap;
 
 // Helper functions because float min and max is used in this source file.
 
@@ -99,10 +98,9 @@ impl Viewport {
                     let line_number_fmt = format!("{:>digits$}", i + 1, digits = line_num_digits);
                     queue!(s, cursor::MoveTo(self.origin.0, self.origin.1 + (i - self.starting_visible_line) as u16));
                     if focused {
-                        queue!(s, style::PrintStyledContent(style::style(line_number_fmt).attribute(style::Attribute::Bold)));
-                    } else {
-                        queue!(s, style::Print(line_number_fmt));
+                        queue!(s, style::SetForegroundColor(Color::White));
                     }
+                    queue!(s, style::Print(format!("{} {}", line_number_fmt, l))); // Print the line number and line
                 }
 
                 if focused {

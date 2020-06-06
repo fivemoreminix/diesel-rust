@@ -97,7 +97,7 @@ impl MenuBar {
         if self.menus[idx].0 == "_Help" { // Annoying, Help is planted on the far right for style
             terminal::size().unwrap().0 - 7
         } else {
-            (1 + self.menus.iter().take(idx).map(|(name, _)| name.len()).sum::<usize>() // We have a single space before menus are listed off
+            (self.menus.iter().take(idx).map(|(name, _)| name.len()).sum::<usize>() // We have a single space before menus are listed off
             + (idx + 1)) // For spaces before and after names (number of items)
             as u16
         }
@@ -109,10 +109,10 @@ impl MenuBar {
         match key.code {
             KeyCode::Right => if self.selection_index + 1 >= self.menus.len() { self.selection_index = 0; } else { self.selection_index += 1; },
             KeyCode::Left => if self.selection_index as isize - 1 < 0 { self.selection_index = self.menus.len()-1; } else { self.selection_index -= 1; },
-            KeyCode::Char('\n') => return Some((self.selection_index, self.get_origin_x_of_menu(self.selection_index))),
+            KeyCode::Enter => return Some((self.selection_index, self.get_origin_x_of_menu(self.selection_index))),
             KeyCode::Char(key) => {
                 let key = key.to_lowercase().next().unwrap();
-                for (i, (c, menu)) in self
+                for (i, (c, _)) in self
                     .menus
                     .iter()
                     .map(|(s, m)| (get_menu_shortcut_from_name(s), m))
@@ -142,9 +142,9 @@ impl Menu {
 
         for (i, (name, a)) in self.children.iter().enumerate() {
             // goto, print name ; note the spaces before and after name (padding)
-            queue!(s, cursor::MoveTo(origin.0 + 1, origin.1 + 1 + i as u16));
+            queue!(s, cursor::MoveTo(origin.0 + 1, origin.1 + 1 + i as u16)); // + 1 makes list appear inside menu bounds
             // Background of a selected item is brighter than others
-            let (bg, fg) = if i == selection_index { (Color::Black, Color::White) } else { (Color::White, Color::Black) };
+            let (bg, fg) = if i == selection_index { (Color::Black, Color::Grey) } else { (Color::Grey, Color::Black) };
             queue!(s, style::SetForegroundColor(fg), style::SetBackgroundColor(bg));
 
             match a {
@@ -153,7 +153,7 @@ impl Menu {
                     let mut chars = name.chars();
                     while let Some(c) = chars.next() {
                         if c == '_' {
-                            queue!(s, style::PrintStyledContent(style::style(chars.next().unwrap()).with(Color::White)));
+                            queue!(s, style::SetForegroundColor(Color::White), style::Print(chars.next().unwrap()), style::SetForegroundColor(fg));
                         } else {
                             queue!(s, style::Print(c));
                         }
@@ -170,48 +170,45 @@ impl Menu {
         use event::{KeyCode, KeyEvent, Event};
         let mut selection_index = 0usize;
         loop {
-            self.render(s, (x_offset, 2), selection_index);
+            self.render(s, (x_offset, 1), selection_index);
 
             s.flush().unwrap();
 
             // All of the input code for a graphical menu.
-            // if let Some(k) = std::io::stdin().keys().next() {
-            loop {
-                match event::read().unwrap() {
-                    Event::Key(KeyEvent { code: KeyCode::Up, .. }) => selection_index = self.previous(selection_index),
-                    Event::Key(KeyEvent { code: KeyCode::Down, .. }) => selection_index = self.next(selection_index),
+            match event::read().unwrap() {
+                Event::Key(KeyEvent { code: KeyCode::Up, .. }) => selection_index = self.previous(selection_index),
+                Event::Key(KeyEvent { code: KeyCode::Down, .. }) => selection_index = self.next(selection_index),
 
-                    // Activate an action or sub-menu expansion using the enter key.
-                    Event::Key(KeyEvent { code: KeyCode::Char('\n'), .. }) => match &self.children[selection_index].1 {
+                // Activate an action or sub-menu expansion using the enter key.
+                Event::Key(KeyEvent { code: KeyCode::Enter, .. }) => match &self.children[selection_index].1 {
+                    MenuAction::Separator => unreachable!(),
+                    MenuAction::Action(action) => return Some(action),
+                    MenuAction::SubMenu(menu) => if let Some(action) = menu.take_over(s, x_offset + self.get_menu_width() as u16) {
+                        return Some(action);
+                    } // We don't want to close this menu if they exited out of the sub-child one.
+                },
+
+                // Activate an action or sub-menu expansion using a shortcut.
+                Event::Key(KeyEvent { code: KeyCode::Char(c), .. }) => if let Some(menu_index) = self.maybe_handle_key_press(c) {
+                    // Update selection index to the menu action we just pressed
+                    selection_index = menu_index;
+                    // Redraw with new selection index
+                    self.render(s, (x_offset, 2), selection_index);
+
+                    let menu_action = &self.children[menu_index].1;
+                    match menu_action {
                         MenuAction::Separator => unreachable!(),
                         MenuAction::Action(action) => return Some(action),
-                        MenuAction::SubMenu(menu) => if let Some(action) = menu.take_over(s, x_offset + self.get_menu_width() as u16) {
-                            return Some(action);
-                        } // We don't want to close this menu if they exited out of the sub-child one.
-                    },
-
-                    // Activate an action or sub-menu expansion using a shortcut.
-                    Event::Key(KeyEvent { code: KeyCode::Char(c), .. }) => if let Some(menu_index) = self.maybe_handle_key_press(c) {
-                        // Update selection index to the menu action we just pressed
-                        selection_index = menu_index;
-                        // Redraw with new selection index
-                        self.render(s, (x_offset, 2), selection_index);
-
-                        let menu_action = &self.children[menu_index].1;
-                        match menu_action {
-                            MenuAction::Separator => unreachable!(),
-                            MenuAction::Action(action) => return Some(action),
-                            MenuAction::SubMenu(menu) => match menu.take_over(s, x_offset + self.get_menu_width() as u16) {
-                                Some(action) => return Some(action),
-                                _ => {} // We don't want to close the menu... same as above ^
-                            }
+                        MenuAction::SubMenu(menu) => match menu.take_over(s, x_offset + self.get_menu_width() as u16) {
+                            Some(action) => return Some(action),
+                            _ => {} // We don't want to close the menu... same as above ^
                         }
-                    } else {
-                        break; // For now, when you press an unknown key it will close the menu.
-                    },
+                    }
+                } else {
+                    break None; // For now, when you press an unknown key it will close the menu.
+                },
 
-                    _ => break,
-                }
+                _ => break None,
             }
         }
     }
@@ -243,7 +240,7 @@ impl Menu {
 
     /// Returns `true` if the key press was correctly handled,
     /// or `false` if the key could not be handled (or was not recognized).
-    fn maybe_handle_key_press(&self, key: char) -> Option<(usize)> {
+    fn maybe_handle_key_press(&self, key: char) -> Option<usize> {
         let key = key.to_lowercase().next().unwrap();
         for (c, menu_index) in self
             .children
