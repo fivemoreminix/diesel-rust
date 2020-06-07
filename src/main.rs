@@ -9,10 +9,10 @@ use std::panic;
 mod menu;
 mod util;
 mod viewport;
-mod render;
+// mod render;
 
 use viewport::{Viewport, ViewportData, ViewportManager};
-use render::*;
+// use render::*;
 
 /// Returns true if the Viewport actually saved the file, or false if the user cancelled.
 fn viewport_save_as(viewport: &mut Viewport) -> bool {
@@ -28,7 +28,10 @@ fn viewport_save_as(viewport: &mut Viewport) -> bool {
 }
 
 fn main() {
-    panic::set_hook(Box::new(|panic_info| util::alert(&mut stdout(), "Panic!", &format!("{}{}", cursor::Show, panic_info))));
+    panic::set_hook(Box::new(|panic_info| {
+        util::alert(&mut stdout(), "Panic!", &format!("{}", panic_info));
+        execute!(stdout(), cursor::RestorePosition, terminal::LeaveAlternateScreen, cursor::Show);
+    }));
 
     terminal::enable_raw_mode().unwrap();
     execute!(stdout(), cursor::SavePosition, terminal::EnterAlternateScreen);
@@ -87,36 +90,31 @@ fn main() {
     let mut in_menu_mode = false;
 
     loop {
-        if viewport_manager.viewports.is_empty() {
-            in_menu_mode = true; // If no open editors
-        }
-
         size = terminal::size().unwrap();
 
-        queue!(stdout(), style::SetForegroundColor(style::Color::White), style::SetBackgroundColor(style::Color::Black));
-        // write!(screen, "{}{}", color::Bg(color::Black), color::Fg(color::LightWhite)).unwrap();
-        // for l in (0..size.1).map(|i| format!("{}{}", cursor::Goto(0, 1 + i as u16), "▒".repeat(size.0 as usize))) {
-        //     write!(screen, "{}", l).unwrap();
-        // }
-        for line in 0..size.1 {
-            queue!(stdout(), cursor::MoveTo(0, 1 + line as u16));
-            write!(stdout(), "{}", "▒".repeat(size.0 as usize));
+        if viewport_manager.viewports.is_empty() { // If no open editors
+            in_menu_mode = true;
+
+            queue!(screen, style::SetForegroundColor(style::Color::White), style::SetBackgroundColor(style::Color::Black));
+            for line in 0..size.1 {
+                queue!(screen, cursor::MoveTo(0, 1 + line as u16), style::Print("▒".repeat(size.0 as usize)));
+            }
         }
 
         // Set the default terminal colors
         // TODO: We need better coloring infrastructure
-        queue!(stdout(), style::SetForegroundColor(style::Color::White), style::SetBackgroundColor(style::Color::Blue)).unwrap();
+        queue!(screen, style::SetForegroundColor(style::Color::White), style::SetBackgroundColor(style::Color::Blue)).unwrap();
 
-        queue!(stdout(), cursor::Hide);
+        queue!(screen, cursor::Hide);
 
         // Update the menu bar
-        menu_bar.render(&mut stdout(), (0, 0), size.0 as usize, in_menu_mode);
+        menu_bar.render(&mut screen, (0, 0), size.0 as usize, in_menu_mode);
 
         // Update all viewports
         viewport_manager.size = (size.0 as usize, size.1 as usize);
-        viewport_manager.render(&mut stdout(), !in_menu_mode);
+        viewport_manager.render(&mut screen, !in_menu_mode);
 
-        stdout().flush().unwrap();
+        screen.flush().unwrap();
 
         match event::read().unwrap() {
             Event::Key(KeyEvent { code: KeyCode::Esc, .. }) => in_menu_mode = !in_menu_mode,

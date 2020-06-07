@@ -17,7 +17,7 @@ pub fn lines(src: &str) -> Vec<&str> {
     let mut current_start = 0usize; // Index of src that is the beginning of the current line
     let mut starting_next_line = true; // Index of src that is the end of the current line
 
-    let mut chars = src.chars().enumerate();
+    let mut chars = src.char_indices();
     while let Some((i, c)) = chars.next() {
         if starting_next_line {
             starting_next_line = false;
